@@ -17,43 +17,61 @@
 // Priorities of our threads - higher numbers are higher priority
 #define TASK1_PRIORITY            ( tskIDLE_PRIORITY + 1UL )
 #define TASK2_PRIORITY            ( tskIDLE_PRIORITY + 2UL )
-#define TASK2_HIGHER_PRIORITY      ( tskIDLE_PRIORITY + 5UL )
 
 // Stack sizes of our threads in words (4 bytes)
-#define MAIN_TASK_STACK_SIZE configMINIMAL_STACK_SIZE
+#define MAIN_TASK_STACK_SIZE ( configMINIMAL_STACK_SIZE + 96 )
 
 static void task_1(__unused void *params);
 static void task_2(__unused void *params);
 
 static TaskHandle_t task1_handle, task2_handle;
-SemaphoreHandle_t xSemaphore;
+SemaphoreHandle_t xSemaphore1, xSemaphore2;
 
 void task_1(__unused void *params) {
 
     uint32_t count = 0, core_id = 0xDEADBEE1;
-    UBaseType_t task1_pri = tskIDLE_PRIORITY;
+    UBaseType_t pri = tskIDLE_PRIORITY;
 
-    xSemaphore = xSemaphoreCreateMutex();
+    xSemaphore1 = xSemaphoreCreateMutex();
 
-    if( xSemaphore != NULL )
+    if( xSemaphore1 != NULL )
     {
-        // take the mutex, then never give it back.
-        if( xSemaphoreTake( xSemaphore, ( TickType_t ) 10 ) == pdTRUE )
+        if( xSemaphoreTake( xSemaphore1, ( TickType_t ) 10 ) == pdTRUE )
         {
             xTaskCreate(task_2, "Thread2_core", MAIN_TASK_STACK_SIZE, NULL, TASK2_PRIORITY, &task2_handle);
             printf("task1 took the mutex and created task2.\n");
         }
     }
 
+    xSemaphore2 = xSemaphoreCreateMutex();
+    if( xSemaphore2 != NULL )
+    {
+        printf("task1 created mutex2.\n");
+    }
+
+
     while(true) {
 
         count++;
         core_id = portGET_CORE_ID();
-        task1_pri = uxTaskPriorityGet(task1_handle);
+        pri = uxTaskPriorityGet(task1_handle);
 
-        printf("task1 on core %ld, pri=%d, ct=%ld\n", core_id, task1_pri, count);
+        printf("task1 on core %ld, pri=%d, ct=%ld\n", core_id, pri, count);
 
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        if( count > 4 )
+        {
+            if( xSemaphoreTake( xSemaphore2, ( TickType_t ) 10 ) == pdTRUE )
+            {
+                printf("task1 took mutex2.\n");
+
+                if( xSemaphoreGive( xSemaphore1 ) != pdFALSE )
+                {
+                    printf("task1 gave mutex1.\n");
+                }
+            }
+        }
+
+        vTaskDelay(500 / portTICK_PERIOD_MS);
 
     }
 }
@@ -61,19 +79,24 @@ void task_1(__unused void *params) {
 void task_2(__unused void *params) {
 
     uint32_t count = 0, core_id = 0xDEADBEE2;
-    UBaseType_t task2_pri = tskIDLE_PRIORITY;
+    UBaseType_t pri = tskIDLE_PRIORITY;
 
-    /* delay 500ms first, so the execution timing of task1 and task2 will interleave with each other. */
-    vTaskDelay(500 / portTICK_PERIOD_MS);
 
     while(true) {
 
         count++;
         core_id = portGET_CORE_ID();
-        task2_pri = uxTaskPriorityGet(task2_handle);
+        pri = uxTaskPriorityGet(task2_handle);
 
-        printf("task2 on core %ld, pri=%d, ct=%ld\n", core_id, task2_pri, count);
+        printf("task2 on core %ld, pri=%d, ct=%ld\n", core_id, pri, count);
 
+        if( count == 2 )
+        {
+            if( xSemaphoreTake( xSemaphore1, ( TickType_t ) portMAX_DELAY ) != pdFALSE )
+            {
+                printf("task2 took mutex1.\n");
+            }
+        }
 
 #ifdef portREMOVE_STATIC_QUALIFIER
     	extern volatile UBaseType_t uxTopReadyPriority;
@@ -84,7 +107,7 @@ void task_2(__unused void *params) {
     	printf("Ready priorities= 0x%x\n", TopReadyPriority_temp);
     	printf("Highest ready Priority= %d\n", ( 31 - __builtin_clz( (TopReadyPriority_temp) ) ));
 #endif
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        vTaskDelay(500 / portTICK_PERIOD_MS);
     }
 }
 
