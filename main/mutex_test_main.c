@@ -19,6 +19,7 @@
 #define TASK2_PRIORITY            ( tskIDLE_PRIORITY + 2UL )
 
 // Stack sizes of our threads in words (4 bytes)
+// Add 96 bytes, so the wired stack overflow would be avoid.
 #define MAIN_TASK_STACK_SIZE ( configMINIMAL_STACK_SIZE + 96 )
 
 static void task_1(__unused void *params);
@@ -55,6 +56,7 @@ void task_1(__unused void *params) {
         count++;
         core_id = portGET_CORE_ID();
         pri = uxTaskPriorityGet(task1_handle);
+        // The uxTaskBasePriorityGet() is only available from SMP ports.
 
         printf("task1 on core %ld, pri=%d, ct=%ld\n", core_id, pri, count);
 
@@ -87,6 +89,7 @@ void task_2(__unused void *params) {
         count++;
         core_id = portGET_CORE_ID();
         pri = uxTaskPriorityGet(task2_handle);
+        // The uxTaskBasePriorityGet() is only available from SMP ports.
 
         printf("task2 on core %ld, pri=%d, ct=%ld\n", core_id, pri, count);
 
